@@ -80,16 +80,16 @@ terraform plan
 ```
 terraform apply
 ```
-- Terraform output should create 33 resources and show you the public dns string you can use to connect to the TFE instance
+- Terraform output should create 34 resources and show you the public dns string you can use to connect to the TFE instance
 ```
-Apply complete! Resources: 33 added, 0 changed, 0 destroyed.
+Apply complete! Resources: 34 added, 0 changed, 0 destroyed.
 
 Outputs:
 
-ssh_tfe_server = "ssh ubuntu@patrick-tfe3.bg.hashicorp-success.com"
-ssh_tfe_server_ip = "ssh ubuntu@13.51.23.34"
-tfe_appplication = "https://patrick-tfe3.bg.hashicorp-success.com"
-tfe_dashboard = "https://patrick-tfe3.bg.hashicorp-success.com:8800"
+ssh_tfe_server = "ssh ec2-user@patrick-tfe4.tf-support.hashicorpdemo.com"
+ssh_tfe_server_ip = "ssh ec2-user@13.50.151.22"
+tfe_appplication = "https://patrick-tfe4.tf-support.hashicorpdemo.com"
+tfe_dashboard = "https://patrick-tfe4.tf-support.hashicorpdemo.com:8800"
 ```
 - Connect to the TFE dashboard. This could take 10 minutes before fully functioning
 ![](media/20220516105301.png)   
