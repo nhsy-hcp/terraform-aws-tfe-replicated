@@ -186,8 +186,8 @@ write_files:
       
       # install aws cli
       pushd /var/tmp
-      curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-      unzip awscliv2.zip
+      curl -sLo "awscliv2.zip" "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+      unzip -q awscliv2.zip
       ./aws/install --bin-dir /usr/bin --install-dir /usr/local/aws-cli --update
       #yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
       #systemctl enable amazon-ssm-agent
@@ -230,4 +230,5 @@ write_files:
 runcmd:
   - /var/tmp/configure_server.sh
   - /var/tmp/download_and_unpack_software.sh
+  - sleep 30
   - /var/tmp/install_tfe.sh
