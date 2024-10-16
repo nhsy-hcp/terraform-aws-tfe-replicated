@@ -1,0 +1,33 @@
+# https://taskfile.dev
+
+version: '3'
+
+tasks:
+  default:
+    aliases: ["all"]
+    cmds:
+      - terraform init
+      - terraform validate
+      - terraform apply -auto-approve
+    silent: true
+
+  plan:
+    cmds:
+      - terraform fmt -recursive
+      - terraform plan
+    silent: true
+
+  destroy:
+    cmds:
+      - terraform destroy -auto-approve
+    silent: true
+
+  redeploy:
+    cmds:
+      - terraform apply -replace="aws_instance.default" -auto-approve
+    silent: true
+
+  partial-destroy:
+    cmds:
+      - terraform destroy -target="aws_instance.default" -target="aws_db_instance.default" -auto-approve
+    silent: true
