@@ -2,10 +2,31 @@ data "http" "myip" {
   url = "https://ipinfo.io/ip"
 }
 
-# data.http.myip.body
+# aws ec2 describe-images --owners 309956199498 --query 'sort_by(Images, &CreationDate)[*].[CreationDate,Name,ImageId]' --filters "Name=name,Values=RHEL-7*" --region eu-west-1 --output table --include-deprecated
+data "aws_ami" "rhel_79" {
+  most_recent        = true
+  owners             = ["309956199498"]
+  include_deprecated = true
+
+  filter {
+    name   = "name"
+    values = ["RHEL-7.9_HVM_GA*"] #["RHEL-7.*GA*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+}
+
 
 locals {
-  mypublicip = data.http.myip.response_body
+  mypublicip = "${chomp(data.http.myip.response_body)}/32"
 }
 
 resource "aws_vpc" "main" {
@@ -81,7 +102,7 @@ resource "aws_security_group" "default-sg" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["${local.mypublicip}/32", "0.0.0.0/0"]
+    cidr_blocks = ["${local.mypublicip}"] #"0.0.0.0/0"
   }
 
   ingress {
@@ -89,7 +110,7 @@ resource "aws_security_group" "default-sg" {
     from_port   = 19999
     to_port     = 19999
     protocol    = "tcp"
-    cidr_blocks = ["${local.mypublicip}/32", "0.0.0.0/0"]
+    cidr_blocks = ["${local.mypublicip}"] #"0.0.0.0/0"
   }
 
   ingress {
@@ -97,7 +118,7 @@ resource "aws_security_group" "default-sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["${local.mypublicip}/32", "0.0.0.0/0"]
+    cidr_blocks = ["${local.mypublicip}"] #"0.0.0.0/0"
   }
 
   ingress {
@@ -105,7 +126,7 @@ resource "aws_security_group" "default-sg" {
     from_port   = 8800
     to_port     = 8800
     protocol    = "tcp"
-    cidr_blocks = ["${local.mypublicip}/32", "0.0.0.0/0"]
+    cidr_blocks = ["${local.mypublicip}"] #"0.0.0.0/0"
   }
 
   ingress {
@@ -129,7 +150,7 @@ resource "aws_security_group" "default-sg" {
   }
 }
 
-resource "aws_s3_bucket" "tfe-bucket" {
+resource "aws_s3_bucket" "tfe" {
   bucket        = "${var.tag_prefix}-bucket"
   force_destroy = true
 
@@ -139,13 +160,13 @@ resource "aws_s3_bucket" "tfe-bucket" {
 }
 
 resource "aws_s3_bucket_versioning" "tfe-bucket-versioning" {
-  bucket = aws_s3_bucket.tfe-bucket.id
+  bucket = aws_s3_bucket.tfe.id
   versioning_configuration {
     status = "Enabled"
   }
 }
 
-resource "aws_s3_bucket" "tfe-bucket-software" {
+resource "aws_s3_bucket" "software" {
   bucket        = "${var.tag_prefix}-software"
   force_destroy = true
 
@@ -156,20 +177,20 @@ resource "aws_s3_bucket" "tfe-bucket-software" {
 
 
 resource "aws_s3_object" "object_license" {
-  bucket = "${var.tag_prefix}-software"
+  bucket = aws_s3_bucket.software.id
   key    = var.filename_license
   source = "files/${var.filename_license}"
 
-  depends_on = [
-    aws_s3_bucket.tfe-bucket-software
-  ]
+  # depends_on = [
+  #   aws_s3_bucket.tfe-bucket-software
+  # ]
 
 }
 
-resource "aws_s3_bucket_acl" "tfe-bucket" {
-  bucket = aws_s3_bucket.tfe-bucket.id
-  acl    = "private"
-}
+# resource "aws_s3_bucket_acl" "tfe-bucket" {
+#   bucket = aws_s3_bucket.tfe-bucket.id
+#   acl    = "private"
+# }
 
 resource "aws_iam_role" "role" {
   name = "${var.tag_prefix}-role"
@@ -266,28 +287,25 @@ resource "acme_certificate" "certificate" {
 resource "aws_s3_object" "certificate_artifacts_s3_objects" {
   for_each = toset(["certificate_pem", "issuer_pem", "private_key_pem"])
 
-  bucket  = "${var.tag_prefix}-software"
+  bucket  = aws_s3_bucket.software.id
   key     = each.key # TODO set your own bucket path
   content = lookup(acme_certificate.certificate, "${each.key}")
 }
 
-data "aws_route53_zone" "selected" {
+data "aws_route53_zone" "default" {
   name         = var.dns_zonename
   private_zone = false
 }
 
-resource "aws_route53_record" "www" {
-  zone_id = data.aws_route53_zone.selected.zone_id
+resource "aws_route53_record" "default" {
+  zone_id = data.aws_route53_zone.default.zone_id
   name    = var.dns_hostname
   type    = "A"
   ttl     = "300"
-  records = [aws_eip.tfe-eip.public_ip]
-  depends_on = [
-    aws_eip.tfe-eip
-  ]
+  records = [aws_eip.default.public_ip]
 }
 
-resource "aws_network_interface" "tfe-priv" {
+resource "aws_network_interface" "default" {
   subnet_id   = aws_subnet.public1.id
   private_ips = [cidrhost(cidrsubnet(var.vpc_cidr, 8, 1), 22)]
 
@@ -296,16 +314,16 @@ resource "aws_network_interface" "tfe-priv" {
   }
 }
 
-resource "aws_network_interface_sg_attachment" "sg_attachment" {
+resource "aws_network_interface_sg_attachment" "default" {
   security_group_id    = aws_security_group.default-sg.id
-  network_interface_id = aws_network_interface.tfe-priv.id
+  network_interface_id = aws_network_interface.default.id
 }
 
-resource "aws_eip" "tfe-eip" {
+resource "aws_eip" "default" {
   vpc = true
 
-  instance                  = aws_instance.tfe_server.id
-  associate_with_private_ip = aws_network_interface.tfe-priv.private_ip
+  # instance                  = aws_instance.tfe_server.id
+  associate_with_private_ip = aws_network_interface.default.private_ip
   depends_on                = [aws_internet_gateway.gw]
 
   tags = {
@@ -313,7 +331,12 @@ resource "aws_eip" "tfe-eip" {
   }
 }
 
-resource "aws_ebs_volume" "tfe_swap" {
+resource "aws_eip_association" "default" {
+  instance_id   = aws_instance.default.id
+  allocation_id = aws_eip.default.id
+}
+
+resource "aws_ebs_volume" "swap" {
   availability_zone = local.az1
   size              = 32
   # default is the gp2 disk
@@ -323,7 +346,7 @@ resource "aws_ebs_volume" "tfe_swap" {
   iops = 1000
 }
 
-resource "aws_ebs_volume" "tfe_docker" {
+resource "aws_ebs_volume" "docker" {
   availability_zone = local.az1
   size              = 100
   # default is the gp2 disk
@@ -333,18 +356,18 @@ resource "aws_ebs_volume" "tfe_docker" {
   iops = 2000
 }
 
-resource "aws_key_pair" "default-key" {
+resource "aws_key_pair" "default" {
   key_name   = "${var.tag_prefix}-key"
   public_key = var.public_key
 }
 
-resource "aws_instance" "tfe_server" {
-  ami           = var.ami
+resource "aws_instance" "default" {
+  ami           = data.aws_ami.rhel_79.id #var.ami
   instance_type = "t3.2xlarge"
-  key_name      = "${var.tag_prefix}-key"
+  key_name      = aws_key_pair.default.key_name
 
   network_interface {
-    network_interface_id = aws_network_interface.tfe-priv.id
+    network_interface_id = aws_network_interface.default.id
     device_index         = 0
   }
 
@@ -360,23 +383,25 @@ resource "aws_instance" "tfe_server" {
     tag_prefix           = var.tag_prefix
     filename_license     = var.filename_license
     dns_hostname         = var.dns_hostname
-    tfe-private-ip       = cidrhost(cidrsubnet(var.vpc_cidr, 8, 1), 22)
     tfe_password         = var.tfe_password
     dns_zonename         = var.dns_zonename
     pg_dbname            = aws_db_instance.default.db_name
     pg_address           = aws_db_instance.default.address
     rds_password         = var.rds_password
-    tfe_bucket           = "${var.tag_prefix}-bucket"
+    tfe_bucket           = aws_s3_bucket.tfe.id
+    tfe_private_ip       = aws_network_interface.default.private_ip
+    tfe_public_ip        = aws_eip.default.public_ip
+    software_bucket      = aws_s3_bucket.software.id
     region               = var.region
     tfe_release_sequence = var.tfe_release_sequence
-  }) 
+  })
 
   tags = {
     Name = "${var.tag_prefix}-tfe"
   }
 
   depends_on = [
-    aws_network_interface_sg_attachment.sg_attachment, aws_db_instance.default
+    aws_network_interface_sg_attachment.default, aws_db_instance.default
   ]
 
   metadata_options {
@@ -385,16 +410,16 @@ resource "aws_instance" "tfe_server" {
   }
 }
 
-resource "aws_volume_attachment" "ebs_att_tfe_swap" {
+resource "aws_volume_attachment" "swap" {
   device_name = "/dev/sdh"
-  volume_id   = aws_ebs_volume.tfe_swap.id
-  instance_id = aws_instance.tfe_server.id
+  volume_id   = aws_ebs_volume.swap.id
+  instance_id = aws_instance.default.id
 }
 
-resource "aws_volume_attachment" "ebs_att_tfe_docker" {
+resource "aws_volume_attachment" "docker" {
   device_name = "/dev/sdi"
-  volume_id   = aws_ebs_volume.tfe_docker.id
-  instance_id = aws_instance.tfe_server.id
+  volume_id   = aws_ebs_volume.docker.id
+  instance_id = aws_instance.default.id
 }
 
 resource "aws_db_subnet_group" "default" {
@@ -402,18 +427,18 @@ resource "aws_db_subnet_group" "default" {
   subnet_ids = [aws_subnet.private1.id, aws_subnet.private2.id]
 
   tags = {
-    Name = "My DB subnet group"
+    Name = "DB subnet group"
   }
 }
 
 resource "aws_db_instance" "default" {
   allocated_storage           = 10
   engine                      = "postgres"
-  engine_version              = "12.8"
+  engine_version              = "14.10" #"12.8"
   instance_class              = "db.t3.large"
   username                    = "postgres"
   password                    = var.rds_password
-  parameter_group_name        = "default.postgres12"
+  parameter_group_name        = "default.postgres14"
   skip_final_snapshot         = true
   db_name                     = "tfe"
   publicly_accessible         = false
@@ -430,3 +455,23 @@ resource "aws_db_instance" "default" {
   ]
 }
 
+resource "null_resource" "default" {
+
+  # Changes to tfe instance requires re-provisioning
+  triggers = {
+    instance_id = aws_instance.default.id
+  }
+
+  provisioner "local-exec" {
+    when    = create
+    command = "while ! curl -ksfS --connect-timeout 5 https://${local.fqdn}:8800/dashboard; do sleep 30; done"
+  }
+
+  provisioner "local-exec" {
+    when    = create
+    command = "while ! curl -ksfS --connect-timeout 5 https://${local.fqdn}/_health_check?full=1; do sleep 30; done"
+  }
+  depends_on = [
+    aws_instance.default
+  ]
+}

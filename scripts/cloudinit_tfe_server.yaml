@@ -1,5 +1,35 @@
 #cloud-config
 write_files:
+  - path: /etc/yum.repos.d/centos.repo
+    permissions: '0640'
+    content: |
+      [base]
+      name=CentOS-$releasever - Base
+      baseurl=https://vault.centos.org/7.9.2009/os/$basearch
+      gpgcheck=0
+      gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+      
+      #released updates 
+      [updates]
+      name=CentOS-$releasever - Updates
+      baseurl=https://vault.centos.org/7.9.2009/updates/$basearch
+      gpgcheck=0
+      gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+      
+      #additional packages that may be useful
+      [extras]
+      name=CentOS-$releasever - Extras
+      baseurl=https://vault.centos.org/7.9.2009/extras/$basearch
+      gpgcheck=0
+      gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+      
+      #additional packages that extend functionality of existing packages
+      [centosplus]
+      name=CentOS-$releasever - Plus
+      baseurl=https://vault.centos.org/7.9.2009/centosplus/$basearch
+      gpgcheck=0
+      enabled=0
+      gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
   - path: /etc/replicated.conf
     permissions: '0640'
     content: |
@@ -59,20 +89,19 @@ write_files:
   - path: /var/tmp/configure_server.sh 
     permissions: '0750'
     content: |
-      #!/bin/bash
-      
+      #!/usr/bin/env bash
+      exec &> >(tee -a /var/log/user-data.log)
+
       # Wait until there is internet before continue
       until ping -c1 google.com &>/dev/null; do
        echo "waiting for networking to initialise"
        sleep 3 
       done 
-      
-      # add ssh key alvaro
-      curl -sL https://raw.githubusercontent.com/kikitux/curl-bash/master/provision/add_github_user_public_keys.sh | GITHUB_USER=kikitux bash
-      
-      # add ssh key patrick
-      curl -sL https://raw.githubusercontent.com/kikitux/curl-bash/master/provision/add_github_user_public_keys.sh | GITHUB_USER=munnep bash
-      
+
+      # disable selinux
+      setenforce 0
+      getenforce
+      sed -i 's/SELINUX=enforcing/SELINUX=permissive/g' /etc/selinux/config
       
       # Set swappiness
       if test -f /sys/kernel/mm/transparent_hugepage/enabled; then
@@ -139,49 +168,66 @@ write_files:
       fi
       
       # install requirements for tfe
-      yum -y update
-      yum -y install unzip
+      #yum -y update
+      yum -y install tree unzip docker
+      systemctl enable docker
+      systemctl start docker
+      sed -i 's/"defaultAction":\s*"SCMP_ACT_ERRNO"/"defaultAction": "SCMP_ACT_TRACE"/1' /etc/docker/seccomp.json
+      systemctl restart docker
   - path: /var/tmp/download_and_unpack_software.sh 
     permissions: '0750'
     content: |
       #!/usr/bin/env bash
-      
-      # install aws cli
-      pushd /var/tmp
-      curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-      unzip awscliv2.zip
-      sudo ./aws/install --bin-dir /usr/bin --install-dir /usr/local/aws-cli --update
-      
-      # Download files from the bucket
-      aws s3 cp s3://${tag_prefix}-software/${filename_license} /var/tmp/${filename_license}
-      aws s3 cp s3://${tag_prefix}-software/certificate_pem /var/tmp/certificate_pem
-      aws s3 cp s3://${tag_prefix}-software/issuer_pem /var/tmp/issuer_pem
-      aws s3 cp s3://${tag_prefix}-software/private_key_pem /var/tmp/server.key
-      
-      # Create a full chain from the certificates
-      cat /var/tmp/certificate_pem >> /var/tmp/server.crt
-      cat /var/tmp/issuer_pem >> /var/tmp/server.crt
-  - path: /var/tmp/install_tfe.sh   
-    permissions: '0750'
-    content: |
-      #!/usr/bin/env bash
+      exec &> >(tee -a /var/log/user-data.log)
+
       # disable selinux
       setenforce 0
       getenforce
       
+      # install aws cli
+      pushd /var/tmp
+      curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+      unzip awscliv2.zip
+      ./aws/install --bin-dir /usr/bin --install-dir /usr/local/aws-cli --update
+      #yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+      #systemctl enable amazon-ssm-agent
+      #systemctl start amazon-ssm-agent
+      
+      # Download files from the bucket
+      aws s3 cp s3://${software_bucket}/${filename_license} /var/tmp/${filename_license}
+      aws s3 cp s3://${software_bucket}/certificate_pem /var/tmp/certificate_pem
+      aws s3 cp s3://${software_bucket}/issuer_pem /var/tmp/issuer_pem
+      aws s3 cp s3://${software_bucket}/private_key_pem /var/tmp/server.key
+      
+      # Create a full chain from the certificates
+      cat /var/tmp/certificate_pem >> /var/tmp/server.crt
+      cat /var/tmp/issuer_pem >> /var/tmp/server.crt
+      chmod 644 /var/tmp/*.crt
+      chmod 644 /var/tmp/*.key
+  - path: /var/tmp/install_tfe.sh   
+    permissions: '0750'
+    content: |
+      #!/usr/bin/env bash
+      exec &> >(tee -a /var/log/user-data.log)
+
       # Get the public IP of the instance
-      PUBLIC_IP=`curl http://169.254.169.254/latest/meta-data/public-ipv4`
+      #export PUBLIC_IP=`curl -s http://169.254.169.254/latest/meta-data/public-ipv4`
+      #export PRIVATE_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`
+      
+      # disable selinux
+      setenforce 0
+      getenforce
       
       pushd /var/tmp
-      curl -o install.sh https://install.terraform.io/ptfe/stable
-      
+      curl -sLo install.sh https://install.terraform.io/ptfe/stable
+      chmod +x ./install.sh
       
       if [ "${tfe_release_sequence}" ] ; then
-        bash ./install.sh release-sequence=${tfe_release_sequence} no-proxy private-address=${tfe-private-ip} public-address=$PUBLIC_IP
+        ./install.sh release-sequence=${tfe_release_sequence} no-docker no-proxy private-address=${tfe_private_ip} public-address=${tfe_public_ip}
       else
-        bash ./install.sh no-proxy private-address=${tfe-private-ip} public-address=$PUBLIC_IP
+        ./install.sh no-docker no-proxy private-address=${tfe_private_ip} public-address=${tfe_public_ip}
       fi
 runcmd:
-  - sudo bash /var/tmp/configure_server.sh 
-  - sudo bash /var/tmp/download_and_unpack_software.sh 
-  - sudo bash /var/tmp/install_tfe.sh 
+  - /var/tmp/configure_server.sh
+  - /var/tmp/download_and_unpack_software.sh
+  - /var/tmp/install_tfe.sh
