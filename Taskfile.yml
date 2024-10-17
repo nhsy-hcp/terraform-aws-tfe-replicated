@@ -31,3 +31,15 @@ tasks:
     cmds:
       - terraform destroy -target="aws_instance.default" -target="aws_db_instance.default" -auto-approve
     silent: true
+
+  sts:
+    cmds:
+      - aws sts get-caller-identity
+    silent: true
+
+  doormat:
+    cmd: doormat login -v || doormat login -f && doormat aws export --role $(doormat aws list | grep -m 1 'role')
+
+#function set_aws_sts {
+#    doormat login -v || doormat login -f && eval $(doormat aws export --role $(doormat aws list | grep -m 1 'role')) && aws sts get-caller-identity
+#}

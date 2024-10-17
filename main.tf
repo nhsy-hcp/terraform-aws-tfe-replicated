@@ -359,7 +359,7 @@ resource "aws_ebs_volume" "docker" {
 
 resource "aws_key_pair" "default" {
   key_name   = "${var.tag_prefix}-key"
-  public_key = var.public_key
+  public_key = var.ssh_public_key
 }
 
 resource "aws_instance" "default" {
@@ -448,12 +448,12 @@ resource "aws_db_instance" "default" {
   identifier                  = "${var.tag_prefix}-rds"
   allow_major_version_upgrade = true
   tags = {
-    "Name" = var.tag_prefix
+    "Name" = "${var.tag_prefix}-rds"
   }
 
-  depends_on = [
-    aws_s3_object.certificate_artifacts_s3_objects
-  ]
+  # depends_on = [
+  #   aws_s3_object.certificate_artifacts_s3_objects
+  # ]
 }
 
 resource "null_resource" "default" {
@@ -463,16 +463,39 @@ resource "null_resource" "default" {
     instance_id = aws_instance.default.id
   }
 
+  connection {
+    host        = aws_eip.default.public_ip
+    type        = "ssh"
+    user        = "ec2-user"
+    private_key = file(var.ssh_private_key_file)
+    timeout     = "10m"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "echo Pausing for cloudinit completion...",
+      "while [ ! -f /var/log/cloudinit_complete ]; do sleep 10; done",
+      "sudo systemctl stop replicated*",
+      "sudo rm -rf /var/lib/replicated/",
+      "sleep 60",
+      # "cd /var/tmp && sudo ./configure_server.sh",
+      # "cd /var/tmp && sudo ./download_and_unpack_software.sh",
+      "cd /var/tmp && sudo ./install_tfe.sh",
+    ]
+  }
+
   provisioner "local-exec" {
     when    = create
     command = "while ! curl -ksfS --connect-timeout 5 https://${local.fqdn}:8800/dashboard; do sleep 30; done"
   }
 
-  provisioner "local-exec" {
-    when    = create
-    command = "while ! curl -ksfS --connect-timeout 5 https://${local.fqdn}/_health_check?full=1; do sleep 30; done"
-  }
+  # provisioner "local-exec" {
+  #   when    = create
+  #   command = "while ! curl -ksfS --connect-timeout 5 https://${local.fqdn}/_health_check?full=1; do sleep 30; done"
+  # }
+
   depends_on = [
-    aws_instance.default
+    aws_instance.default,
+    aws_db_instance.default
   ]
 }

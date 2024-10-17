@@ -230,5 +230,7 @@ write_files:
 runcmd:
   - /var/tmp/configure_server.sh
   - /var/tmp/download_and_unpack_software.sh
-  - sleep 30
+  - sleep 60
   - /var/tmp/install_tfe.sh
+  - sleep 60
+  - touch /var/log/cloudinit_complete

@@ -18,7 +18,7 @@ variable "rds_password" {
   description = "password for the RDS postgres database user"
 }
 
-variable "public_key" {
+variable "ssh_public_key" {
   type        = string
   description = "public to use on the instances"
 }
@@ -47,3 +47,4 @@ variable "tfe_release_sequence" {
   description = "the TFE release sequence you want to install"
 }
 
+variable "ssh_private_key_file" {}
