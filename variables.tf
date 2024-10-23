@@ -10,10 +10,6 @@ variable "vpc_cidr" {
   description = "which private subnet do you want to use for the VPC. Subnet mask of /16"
 }
 
-variable "ami" {
-  description = "Must be an Ubuntu image that is available in the region you choose"
-}
-
 variable "rds_password" {
   description = "password for the RDS postgres database user"
 }
