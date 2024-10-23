@@ -99,11 +99,11 @@ resource "aws_security_group" "default-sg" {
   description = "${var.tag_prefix}-sg"
 
   ingress {
-    description = "https from private ip"
+    description = "https"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["${local.mypublicip}"] #"0.0.0.0/0"
+    cidr_blocks = ["${local.mypublicip}", "${aws_eip.default.public_ip}/32"]
   }
 
   ingress {
@@ -127,7 +127,7 @@ resource "aws_security_group" "default-sg" {
     from_port   = 8800
     to_port     = 8800
     protocol    = "tcp"
-    cidr_blocks = ["${local.mypublicip}"] #"0.0.0.0/0"
+    cidr_blocks = ["${local.mypublicip}"]
   }
 
   ingress {
