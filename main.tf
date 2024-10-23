@@ -475,6 +475,7 @@ resource "null_resource" "default" {
     inline = [
       "echo Pausing for cloudinit completion...",
       "while [ ! -f /var/log/cloudinit_complete ]; do sleep 10; done",
+      "sleep 60",
       "sudo systemctl stop replicated*",
       "sudo rm -rf /var/lib/replicated/",
       "sleep 60",
