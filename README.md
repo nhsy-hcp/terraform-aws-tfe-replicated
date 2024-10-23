@@ -60,13 +60,14 @@ region                   = "eu-north-1"                         # Region to crea
 vpc_cidr                 = "10.234.0.0/16"                      # subnet mask that can be used 
 ami                      = "ami-09f0506c9ef0fb473"              # AMI of the Red Hat image  
 rds_password             = "Password#1"                         # password used for the RDS environment
-filename_license         = "license.rli"                        # filename of your TFE license stored under ./files
+filename_license         = "license.rli"                        # filename of your Replicated TFE license stored under ./files
 dns_hostname             = "patrick-tfe4"                       # DNS hostname for the TFE
 dns_zonename             = "tf-support.hashicorpdemo.com"       # DNS zone name to be used
 tfe_password             = "Password#1"                         # TFE password for the dashboard and encryption of the data
 certificate_email        = "patrick.munne@hashicorp.com"        # Your email address used by TLS certificate registration
 tfe_release_sequence     = "610"                                # Sequence of Terraform enterprise you want to install empty for latest
-public_key               = "ssh-rsa AAAAB3Nz"                   # The public key for you to connect to the server over SSH
+ssh_public_key           = "ssh-rsa AAAAB3Nz"                   # The public key for you to connect to the server over SSH
+ssh_private_key_file     = "~/.ssh/myprivatekey.pem"            # The public key for you to connect to the server over SSH
 ```
 - Terraform initialize
 ```
@@ -80,13 +81,13 @@ terraform plan
 ```
 terraform apply
 ```
-- Terraform output should create 34 resources and show you the public dns string you can use to connect to the TFE instance
+- Terraform output should create 35 resources and show you the public dns string you can use to connect to the TFE instance
 ```
-Apply complete! Resources: 34 added, 0 changed, 0 destroyed.
+Apply complete! Resources: 35 added, 0 changed, 0 destroyed.
 
 Outputs:
 
-ssh_tfe_server = "ssh ec2-user@patrick-tfe4.tf-support.hashicorpdemo.com"
+ssh_tfe_server = "ssh -i ~/.ssh/myprivatekey.pem ec2-user@patrick-tfe4.tf-support.hashicorpdemo.com"
 ssh_tfe_server_ip = "ssh ec2-user@13.50.151.22"
 tfe_appplication = "https://patrick-tfe4.tf-support.hashicorpdemo.com"
 tfe_dashboard = "https://patrick-tfe4.tf-support.hashicorpdemo.com:8800"
