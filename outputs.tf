@@ -1,5 +1,5 @@
 output "ssh" {
-  value = "ssh ec2-user@${var.dns_hostname}.${var.dns_zonename}"
+  value = "ssh -i ${var.ssh_private_key_file} ec2-user@${var.dns_hostname}.${var.dns_zonename}"
 }
 
 output "admin_url" {
